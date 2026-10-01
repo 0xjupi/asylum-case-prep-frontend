@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------------
+   Design tokens
+   A case-file / dossier metaphor: cool paper background, hairline rules
+   instead of card shadows, one restrained accent per context (general,
+   adversarial, neutral, advisory). No gradients, no rounded-pill chrome.
+   ------------------------------------------------------------------------ */
+
+@theme {
+  --font-display: "Source Serif 4", Georgia, serif;
+  --font-body: "Public Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-paper: #f1f1ec;
+  --color-paper-dim: #e9e9e2;
+  --color-surface: #fdfdfb;
+  --color-ink: #1e2624;
+  --color-ink-soft: #4b5450;
+  --color-ink-faint: #7c847f;
+  --color-line: #d9dad2;
+  --color-line-strong: #b9bcb0;
+
+  --color-accent: #2f5d50;
+  --color-accent-dim: #234840;
+  --color-accent-soft: #e3ece7;
+
+  --color-brick: #8b3a34;
+  --color-brick-soft: #f3e1de;
+
+  --color-ochre: #93601f;
+  --color-ochre-soft: #f1e5d1;
+
+  --color-slate: #4a5c66;
+  --color-slate-soft: #e6ebed;
+
+  --shadow-panel: none;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-accent-dim);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+}
