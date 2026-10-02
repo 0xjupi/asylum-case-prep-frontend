@@ -1,11 +1,12 @@
 import { apiRequest, isBackendConfigured, mockDelay } from "./client";
 import { mockDeleteDocument, mockGetDocuments, mockUploadDocument } from "@/services/mock/mockDocuments";
+import { MAX_DOCUMENT_SIZE_BYTES, validateFile } from "@/lib/uploadConstraints";
 import type { ApiResult, CaseDocument, DocumentCategory } from "@/types";
 
 /**
  * Backend contract:
  *   GET    /api/documents             -> CaseDocument[]
- *   POST   /api/documents/upload      -> CaseDocument (multipart/form-data)
+ *   POST   /api/documents/upload      -> CaseDocument (multipart/form-data, fields: file, category)
  *   DELETE /api/documents/{id}        -> 204
  */
 export const documentsService = {
@@ -20,6 +21,11 @@ export const documentsService = {
   },
 
   async upload(file: File, category: DocumentCategory): Promise<ApiResult<CaseDocument>> {
+    const validation = validateFile(file, MAX_DOCUMENT_SIZE_BYTES);
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+
     if (isBackendConfigured) {
       const formData = new FormData();
       formData.append("file", file);

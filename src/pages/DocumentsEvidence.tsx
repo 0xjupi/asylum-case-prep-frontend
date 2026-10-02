@@ -1,11 +1,12 @@
 import { useRef, useState, type DragEvent } from "react";
-import { UploadCloud, FileText, Archive, Trash2, Eye } from "lucide-react";
+import { UploadCloud, FileText, Archive, Trash2, Eye, AlertTriangle } from "lucide-react";
 import { documentsService } from "@/services/api";
 import { useAsync } from "@/hooks/useAsync";
 import { Panel, PanelHeader, Button, DataModeBanner, EmptyState, Badge } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 import { SkeletonPanel } from "@/components/ui/Skeleton";
 import { formatBytes, formatDate } from "@/lib/labels";
+import { ALLOWED_FILE_ACCEPT } from "@/lib/uploadConstraints";
 import { DOCUMENT_CATEGORY_LABELS } from "@/types";
 import type { CaseDocument, DocumentCategory, DocumentStatus } from "@/types";
 import { clsx } from "clsx";
@@ -25,13 +26,20 @@ export function DocumentsEvidence() {
   const [activeCategory, setActiveCategory] = useState<DocumentCategory | "all">("all");
   const [isDragging, setIsDragging] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<CaseDocument | null>(null);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleUpload(files: FileList | null, category: DocumentCategory = "other") {
     if (!files || files.length === 0) return;
+    const errors: string[] = [];
     for (const file of Array.from(files)) {
-      await documentsService.upload(file, category);
+      try {
+        await documentsService.upload(file, category);
+      } catch (err) {
+        errors.push(err instanceof Error ? `${file.name}: ${err.message}` : `${file.name}: upload failed.`);
+      }
     }
+    setUploadErrors(errors);
     reload();
   }
 
@@ -48,11 +56,22 @@ export function DocumentsEvidence() {
       <div>
         <h1 className="font-display text-2xl font-semibold text-ink">Documents &amp; evidence</h1>
         <p className="mt-1 text-sm text-ink-soft">
-          Organize the material behind your case. Files stay here until you connect storage on the backend.
+          Organize the material behind your case. PDF, DOCX, TXT, JPG, or PNG — up to 25 MB per file.
         </p>
       </div>
 
       <DataModeBanner isMock={isMock} />
+
+      {uploadErrors.length > 0 && (
+        <div className="space-y-1.5 border border-brick/30 bg-brick-soft px-4 py-3 text-sm text-brick">
+          {uploadErrors.map((message, i) => (
+            <div key={i} className="flex items-start gap-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>{message}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div
         onDragOver={(e: DragEvent) => { e.preventDefault(); setIsDragging(true); }}
@@ -72,6 +91,7 @@ export function DocumentsEvidence() {
           ref={fileInputRef}
           type="file"
           multiple
+          accept={ALLOWED_FILE_ACCEPT}
           className="hidden"
           onChange={(e) => handleUpload(e.target.files)}
         />

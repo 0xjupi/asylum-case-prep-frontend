@@ -64,7 +64,10 @@ export function CountryInformation() {
             <Panel key={item.id}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <Badge tone="neutral">{COUNTRY_INFO_CATEGORY_LABELS[item.category]}</Badge>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge tone="neutral">{COUNTRY_INFO_CATEGORY_LABELS[item.category]}</Badge>
+                    <Badge tone="slate">{item.geographicScope}</Badge>
+                  </div>
                   <h3 className="mt-2 font-display text-base font-semibold text-ink">{item.title}</h3>
                 </div>
                 <Badge tone={RELIABILITY_TONE[item.reliability]}>{item.reliability} reliability</Badge>

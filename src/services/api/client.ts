@@ -1,3 +1,6 @@
+let accessKey = "";
+export function setAccessKey(value: string) { accessKey = value; }
+
 import { ApiRequestError } from "@/types/common";
 
 /**
@@ -58,6 +61,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       headers: {
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
         Accept: "application/json",
+        ...(accessKey ? { Authorization: `Bearer ${accessKey}` } : {}),
         ...headers,
       },
     });
@@ -69,11 +73,16 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     });
   }
 
+  if (response.status === 401) {
+    accessKey = "";
+    window.dispatchEvent(new Event("workspace-locked"));
+  }
   if (!response.ok) {
     let detail: string | undefined;
     try {
       const body = await response.json();
-      detail = body?.detail ?? body?.message;
+      const value = body?.detail ?? body?.message;
+      detail = typeof value === "string" ? value : "The request contains missing or invalid fields.";
     } catch {
       // response body wasn't JSON; ignore
     }

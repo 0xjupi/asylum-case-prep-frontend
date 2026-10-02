@@ -19,28 +19,29 @@ export function useAsync<T>(
 ) {
   const [state, setState] = useState<AsyncState<T>>({ data: undefined, isMock: false, loading: true, error: null });
   const loaderRef = useRef(loader);
+  const requestSequence = useRef(0);
   loaderRef.current = loader;
 
   const reload = useCallback(() => {
-    let cancelled = false;
+    const sequence = ++requestSequence.current;
     setState((s) => ({ ...s, loading: true, error: null }));
     loaderRef
       .current()
       .then((result) => {
-        if (cancelled) return;
+        if (sequence !== requestSequence.current) return;
         setState({ data: result.data, isMock: result.isMock, loading: false, error: null });
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (sequence !== requestSequence.current) return;
         setState((s) => ({ ...s, loading: false, error: err instanceof Error ? err.message : "Something went wrong." }));
       });
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  useEffect(() => reload(), [reload]);
+  useEffect(() => {
+    reload();
+    return () => { requestSequence.current += 1; };
+  }, [reload]);
 
   return { ...state, reload };
 }

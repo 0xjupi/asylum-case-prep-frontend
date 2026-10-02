@@ -1,4 +1,4 @@
-import type { TranscriptDocument } from "@/types/transcript";
+import type { TranscriptDocument, TranscriptStatus } from "@/types/transcript";
 import { getStoredDataMode } from "./dataMode";
 
 const EMPTY_TRANSCRIPT: TranscriptDocument = {
@@ -10,6 +10,7 @@ const EMPTY_TRANSCRIPT: TranscriptDocument = {
   sections: [],
   entries: [],
   annotations: [],
+  processingError: null,
 };
 
 const SAMPLE_TRANSCRIPT: TranscriptDocument = {
@@ -54,17 +55,58 @@ const SAMPLE_TRANSCRIPT: TranscriptDocument = {
       createdAt: "2026-08-20",
     },
   ],
+  processingError: null,
 };
 
-export async function mockGetTranscript(): Promise<TranscriptDocument> {
+// Once the user actually uploads something in mock mode, that action
+// takes over regardless of the empty/sample preview toggle — this
+// mirrors a real backend closely enough to exercise the polling UI
+// without needing one connected.
+let uploadedTranscript: TranscriptDocument | null = null;
+
+function currentBaseline(): TranscriptDocument {
   return getStoredDataMode() === "sample" ? SAMPLE_TRANSCRIPT : EMPTY_TRANSCRIPT;
 }
 
-export async function mockUploadTranscript(file: File): Promise<TranscriptDocument> {
+export async function mockGetTranscript(): Promise<TranscriptDocument> {
+  return uploadedTranscript ?? currentBaseline();
+}
+
+export async function mockGetTranscriptStatus(): Promise<TranscriptStatus> {
+  const transcript = uploadedTranscript ?? currentBaseline();
   return {
+    id: transcript.id,
+    uploadStatus: transcript.uploadStatus,
+    processingError: transcript.processingError,
+    pageCount: transcript.pageCount,
+    updatedAt: transcript.uploadedAt ?? new Date().toISOString(),
+  };
+}
+
+export async function mockUploadTranscript(file: File): Promise<TranscriptDocument> {
+  const now = new Date().toISOString();
+  uploadedTranscript = {
     ...EMPTY_TRANSCRIPT,
     fileName: file.name,
     uploadStatus: "processing",
-    uploadedAt: new Date().toISOString(),
+    uploadedAt: now,
+    processingError: null,
   };
+
+  // Simulates the real backend's async processing -> ready transition so
+  // the polling flow (transcriptService.pollUntilSettled) has something
+  // real to observe even without a backend connected.
+  const capturedFileName = file.name;
+  setTimeout(() => {
+    if (uploadedTranscript?.fileName !== capturedFileName) return; // superseded by a newer upload
+    uploadedTranscript = {
+      ...uploadedTranscript,
+      uploadStatus: "ready",
+      pageCount: Math.max(1, Math.round(file.size / 45_000)),
+      sections: [],
+      entries: [],
+    };
+  }, 4_000);
+
+  return uploadedTranscript;
 }

@@ -44,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { path: "/hearing/bamf", label: "BAMF simulation", icon: ShieldQuestion },
       { path: "/hearing/lawyer", label: "Lawyer review", icon: Scale },
       { path: "/hearing/judge", label: "Judge evaluation", icon: Gavel },
+      { path: "/preparation", label: "Preparation findings", icon: BookMarked },
     ],
   },
   {

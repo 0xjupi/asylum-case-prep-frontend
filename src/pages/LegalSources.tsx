@@ -3,19 +3,33 @@ import { BookMarked, ExternalLink } from "lucide-react";
 import { legalService } from "@/services/api";
 import { useAsync } from "@/hooks/useAsync";
 import { Panel, DataModeBanner, EmptyState, Badge } from "@/components/ui";
+import type { BadgeTone } from "@/components/ui";
 import { SkeletonPanel } from "@/components/ui/Skeleton";
 import { formatDate } from "@/lib/labels";
-import { LEGAL_SOURCE_CATEGORY_LABELS } from "@/types";
-import type { LegalSourceCategory } from "@/types";
+import { LEGAL_SOURCE_CATEGORY_LABELS, JURISDICTION_LABELS } from "@/types";
+import type { LegalSourceCategory, Jurisdiction, ReliabilityRating } from "@/types";
 import { clsx } from "clsx";
 
 const CATEGORIES = Object.keys(LEGAL_SOURCE_CATEGORY_LABELS) as LegalSourceCategory[];
+const JURISDICTIONS = Object.keys(JURISDICTION_LABELS) as Jurisdiction[];
+
+const RELIABILITY_TONE: Record<ReliabilityRating, BadgeTone> = {
+  high: "accent",
+  medium: "ochre",
+  low: "brick",
+  unrated: "neutral",
+};
 
 export function LegalSources() {
   const { data, isMock, loading, error } = useAsync(() => legalService.listSources(), []);
   const [activeCategory, setActiveCategory] = useState<LegalSourceCategory | "all">("all");
+  const [activeJurisdiction, setActiveJurisdiction] = useState<Jurisdiction | "all">("all");
 
-  const filtered = (data ?? []).filter((item) => activeCategory === "all" || item.category === activeCategory);
+  const filtered = (data ?? []).filter(
+    (item) =>
+      (activeCategory === "all" || item.category === activeCategory) &&
+      (activeJurisdiction === "all" || item.jurisdiction === activeJurisdiction),
+  );
 
   return (
     <div className="space-y-6">
@@ -25,18 +39,27 @@ export function LegalSources() {
           <h1 className="font-display text-2xl font-semibold text-ink">Legal sources</h1>
         </div>
         <p className="mt-1 text-sm text-ink-soft">
-          A reference library of statutes, case law, and guidance. This section presents sources only — it
-          does not offer legal analysis or conclusions.
+          A reference library of statutes, EU regulations, BAMF guidance, and Hessen administrative
+          procedure. This section presents sources only — it does not offer legal analysis or
+          conclusions, and Hessen-specific items are clearly separate from federal law.
         </p>
       </div>
 
       <DataModeBanner isMock={isMock} />
 
-      <div className="flex flex-wrap gap-1.5">
-        <CategoryChip label="All sources" active={activeCategory === "all"} onClick={() => setActiveCategory("all")} />
-        {CATEGORIES.map((cat) => (
-          <CategoryChip key={cat} label={LEGAL_SOURCE_CATEGORY_LABELS[cat]} active={activeCategory === cat} onClick={() => setActiveCategory(cat)} />
-        ))}
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          <CategoryChip label="All sources" active={activeCategory === "all"} onClick={() => setActiveCategory("all")} />
+          {CATEGORIES.map((cat) => (
+            <CategoryChip key={cat} label={LEGAL_SOURCE_CATEGORY_LABELS[cat]} active={activeCategory === cat} onClick={() => setActiveCategory(cat)} />
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <CategoryChip label="All jurisdictions" active={activeJurisdiction === "all"} onClick={() => setActiveJurisdiction("all")} />
+          {JURISDICTIONS.map((j) => (
+            <CategoryChip key={j} label={JURISDICTION_LABELS[j]} active={activeJurisdiction === j} onClick={() => setActiveJurisdiction(j)} />
+          ))}
+        </div>
       </div>
 
       {loading ? (
@@ -46,20 +69,26 @@ export function LegalSources() {
       ) : filtered.length === 0 ? (
         <Panel>
           <EmptyState
-            title="No legal sources added yet."
-            description="Statutes, case law, and BAMF guidance will appear here, each with its citation and a link back to the original source."
+            title="No legal sources match this filter."
+            description="Statutes, case law, and BAMF guidance appear here, each with its citation and a link back to the original source."
           />
         </Panel>
       ) : (
         <div className="space-y-4">
           {filtered.map((source) => (
             <Panel key={source.id}>
-              <Badge tone="neutral">{LEGAL_SOURCE_CATEGORY_LABELS[source.category]}</Badge>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge tone="neutral">{LEGAL_SOURCE_CATEGORY_LABELS[source.category]}</Badge>
+                <Badge tone="slate">{JURISDICTION_LABELS[source.jurisdiction]}</Badge>
+                <Badge tone={RELIABILITY_TONE[source.reliability]}>{source.reliability} reliability</Badge>
+              </div>
               <h3 className="mt-2 font-display text-base font-semibold text-ink">{source.title}</h3>
               {source.summary && <p className="mt-2 text-sm text-ink-soft">{source.summary}</p>}
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line pt-3 text-xs text-ink-faint">
                 {source.courtOrAuthority && <span>{source.courtOrAuthority}</span>}
-                {source.date && <span>{formatDate(source.date)}</span>}
+                {source.date && <span>Dated {formatDate(source.date)}</span>}
+                {source.effectiveDate && <span>Effective {formatDate(source.effectiveDate)}</span>}
+                {source.retrievedDate && <span>Retrieved {formatDate(source.retrievedDate)}</span>}
                 {source.citation && <span className="font-mono">{source.citation}</span>}
                 {source.relevantSection && <span>Section: {source.relevantSection}</span>}
                 {source.sourceUrl && (

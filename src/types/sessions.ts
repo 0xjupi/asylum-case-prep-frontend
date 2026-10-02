@@ -16,6 +16,12 @@ export interface SessionSummary {
   durationMinutes: number | null;
   status: SessionStatus;
   issuesIdentified: number;
+  /** Set only when status is "completed". */
+  completedAt: IsoDateString | null;
+  lawyerReviewAvailable: boolean;
+  lawyerReviewLatestVersion: number | null;
+  judgeEvaluationAvailable: boolean;
+  judgeEvaluationLatestVersion: number | null;
 }
 
 export const SESSION_TYPE_LABELS: Record<SessionType, string> = {

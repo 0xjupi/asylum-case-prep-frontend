@@ -1,3 +1,5 @@
+import { PreparationFindings } from "@/pages/PreparationFindings";
+import { AccessGate } from "@/components/AccessGate";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { DataModeProvider } from "@/context/DataModeContext";
 import { AppShell } from "@/components/layout/AppShell";
@@ -19,7 +21,7 @@ import {
 
 export default function App() {
   return (
-    <DataModeProvider>
+    <AccessGate><DataModeProvider>
       <BrowserRouter>
         <Routes>
           <Route element={<AppShell />}>
@@ -31,6 +33,7 @@ export default function App() {
             <Route path="hearing/bamf" element={<BamfSimulation />} />
             <Route path="hearing/lawyer" element={<LawyerReview />} />
             <Route path="hearing/judge" element={<JudgeEvaluation />} />
+            <Route path="preparation" element={<PreparationFindings />} />
             <Route path="country-information" element={<CountryInformation />} />
             <Route path="legal-sources" element={<LegalSources />} />
             <Route path="sessions" element={<PreviousSessions />} />
@@ -39,6 +42,6 @@ export default function App() {
           </Route>
         </Routes>
       </BrowserRouter>
-    </DataModeProvider>
+    </DataModeProvider></AccessGate>
   );
 }

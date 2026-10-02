@@ -12,6 +12,10 @@ const SAMPLE_SOURCES: LegalSource[] = [
     sourceUrl: null,
     relevantSection: "Placeholder section reference",
     summary: "Placeholder summary text.",
+    jurisdiction: "federal",
+    retrievedDate: "2026-08-01",
+    effectiveDate: null,
+    reliability: "unrated",
   },
 ];
 

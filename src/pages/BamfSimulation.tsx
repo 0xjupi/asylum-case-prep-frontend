@@ -5,8 +5,10 @@ import { hearingService } from "@/services/api";
 import { Panel, PanelHeader, Button, SimulationNotice } from "@/components/ui";
 import type { BamfSessionConfig } from "@/types";
 import { DEFAULT_BAMF_SESSION_CONFIG } from "@/types";
+import { getSafeErrorMessage } from "@/lib/errors";
+import { getPendingStartConfig } from "@/lib/pendingHearingStart";
 
-const FOCUS_OPTIONS: { key: keyof BamfSessionConfig; label: string; description: string }[] = [
+const FOCUS_OPTIONS: { key: Exclude<keyof BamfSessionConfig, "questionLimit">; label: string; description: string }[] = [
   { key: "useEntireTranscript", label: "Use entire transcript", description: "Draw questions from your full uploaded interview transcript." },
   { key: "focusInconsistencies", label: "Focus on inconsistencies", description: "Prioritize passages that may conflict with each other." },
   { key: "focusChronology", label: "Focus on chronology", description: "Prioritize the order and timing of events." },
@@ -18,18 +20,23 @@ const FOCUS_OPTIONS: { key: keyof BamfSessionConfig; label: string; description:
 
 export function BamfSimulation() {
   const navigate = useNavigate();
-  const [config, setConfig] = useState<BamfSessionConfig>(DEFAULT_BAMF_SESSION_CONFIG);
+  const [config, setConfig] = useState<BamfSessionConfig>(() => getPendingStartConfig() ?? DEFAULT_BAMF_SESSION_CONFIG);
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
-  function toggle(key: keyof BamfSessionConfig) {
+  function toggle(key: Exclude<keyof BamfSessionConfig, "questionLimit">) {
     setConfig((c) => ({ ...c, [key]: !c[key] }));
   }
 
   async function handleStart() {
+    if (starting) return;
     setStarting(true);
+    setStartError(null);
     try {
-      await hearingService.start(config);
-      navigate("/hearing");
+      const result = await hearingService.start(config);
+      navigate(`/hearing?sessionId=${encodeURIComponent(result.data.sessionId)}`);
+    } catch (err) {
+      setStartError(getSafeErrorMessage(err, "Could not start this session. Retry with the same settings."));
     } finally {
       setStarting(false);
     }
@@ -57,6 +64,11 @@ export function BamfSimulation() {
 
       <Panel>
         <PanelHeader title="Session configuration" description="Choose what this session should emphasize. You can select more than one." />
+        <label className="mb-4 block text-sm">Number of questions
+          <select disabled={starting} className="ml-3 border p-2" value={config.questionLimit} onChange={e => setConfig(prev => ({ ...prev, questionLimit: Number(e.target.value) }))}>
+            {[5, 10, 15, 20, 30, 50].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {FOCUS_OPTIONS.map((option) => (
             <label
@@ -65,6 +77,7 @@ export function BamfSimulation() {
             >
               <input
                 type="checkbox"
+                disabled={starting}
                 checked={config[option.key]}
                 onChange={() => toggle(option.key)}
                 className="mt-0.5 h-4 w-4 accent-[var(--color-accent)]"
@@ -77,6 +90,7 @@ export function BamfSimulation() {
           ))}
         </div>
 
+        {startError && <p role="alert" className="mt-4 text-sm text-brick">{startError}</p>}
         <div className="mt-6 flex justify-end">
           <Button onClick={handleStart} disabled={starting}>
             {starting ? "Starting…" : "Start session"}

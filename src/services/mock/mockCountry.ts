@@ -20,6 +20,7 @@ const SAMPLE_PROFILE: CountryProfile = {
       url: null,
       excerpt: "Placeholder excerpt text.",
       reliability: "unrated",
+      geographicScope: "National",
     },
   ],
 };

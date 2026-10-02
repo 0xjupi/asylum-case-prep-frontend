@@ -21,6 +21,9 @@ export interface CountryInfoItem {
   url: string | null;
   excerpt: string | null;
   reliability: ReliabilityRating;
+  /** Where within the country this applies (e.g. "National", "Oromia
+   * Region"). Defaults to "National" when not region-specific. */
+  geographicScope: string;
 }
 
 export interface CountryProfile {

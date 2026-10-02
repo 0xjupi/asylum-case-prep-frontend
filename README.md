@@ -49,24 +49,37 @@ redeploying there.
 | `caseService` | GET | `/api/case` | Returns `CaseSummary` |
 | | GET | `/api/case/status` | Returns `CaseStatusSnapshot` (dashboard) |
 | | PATCH | `/api/case` | Partial `CaseSummary` update |
-| `transcriptService` | GET | `/api/transcript` | Returns `TranscriptDocument` |
-| | POST | `/api/transcript/upload` | `multipart/form-data`, returns `TranscriptDocument` |
+| `transcriptService` | GET | `/api/transcript` | Returns `TranscriptDocument` (includes `processingError`) |
+| | GET | `/api/transcript/status` | Lightweight `TranscriptStatus`, polled every 3s (see `src/lib/transcriptPolling.ts`) until `ready`/`failed`, or ~5 min timeout |
+| | POST | `/api/transcript/upload` | `multipart/form-data` (`file`), max 50MB — PDF/DOCX/TXT/JPG/JPEG/PNG only |
 | `documentsService` | GET | `/api/documents` | Returns `CaseDocument[]` |
-| | POST | `/api/documents/upload` | `multipart/form-data` (`file`, `category`) |
+| | POST | `/api/documents/upload` | `multipart/form-data` (`file`, `category`), max 25MB — same file types as above |
 | | DELETE | `/api/documents/{id}` | 204 on success |
 | `hearingService` | GET | `/api/hearing` | Returns `HearingSessionState` |
 | | POST | `/api/hearing/start` | Body: `BamfSessionConfig` |
-| | POST | `/api/hearing/{sessionId}/answer` | Body: `{ answer: string }` |
-| `lawyerService` | GET | `/api/lawyer/review` | Returns `LawyerReview` |
-| `judgeService` | GET | `/api/judge/evaluation` | Returns `JudgeEvaluation` |
+| | POST | `/api/hearing/{sessionId}/answer` | Body: `{ exchangeId: string, answer: string }`. Saved answers are immutable; exact replays are safe. |
+| | POST | `/api/hearing/{sessionId}/retry` | Body: `{ exchangeId: string }`. Generate from an already-saved answer. |
+| `lawyerService` | GET | `/api/lawyer/review?sessionId=` | Returns latest `LawyerReview` for that session. 404 = no review generated yet (not an error) |
+| | GET | `/api/lawyer/review/history?sessionId=` | All versions for that session, newest first |
+| `judgeService` | GET | `/api/judge/evaluation?sessionId=` | Same session-scoping and 404 convention as lawyer review |
+| | GET | `/api/judge/evaluation/history?sessionId=` | All versions for that session, newest first |
 | `countryService` | GET | `/api/country/{countryName}` | Returns `CountryProfile` |
 | `legalService` | GET | `/api/legal/sources` | Returns `LegalSource[]` |
 | `sessionsService` | GET | `/api/sessions` | Returns `SessionSummary[]` |
 | `settingsService` | GET / PATCH | `/api/settings` | Returns `AppSettings` |
 
 Full TypeScript shapes for every type referenced above are in `src/types/`.
-None of these endpoints are assumed to exist yet — the frontend degrades to
-mock data automatically if a call fails to reach a configured backend.
+A matching FastAPI/Pydantic/SQLAlchemy implementation of this exact
+contract lives in the sibling `asylum-case-prep-backend` project.
+
+**Lawyer and Judge are session-scoped, not global.** As of Stage 2, every
+`LawyerReview`/`JudgeEvaluation` belongs to a specific hearing session
+(`Case → Hearing Session → Lawyer Review` / `→ Judge Evaluation`) and
+carries its own `id`, `sessionId`, and `version` — regenerating never
+overwrites a previous version. The Lawyer Review and Judge Evaluation
+pages resolve "the current session" via `useCurrentHearingSession()`
+before fetching, and show a "start a mock hearing first" state if none
+exists yet.
 
 The frontend never calls the Anthropic API or reads any Anthropic/AWS
 credentials. All AI orchestration is expected to live behind your FastAPI
@@ -88,8 +101,12 @@ src/
     layout/       AppShell, Sidebar, TopBar
     ui/           Panel, Button, Badge, EmptyState, Skeleton, SimulationNotice, etc.
   pages/          One file per top-level route
-  hooks/          useAsync — the loading/error/data pattern every page uses
-  lib/            Formatting + label helpers
+  hooks/          useAsync (loading/error/data pattern) and
+                   useCurrentHearingSession (resolves "the current session" for
+                   the session-scoped Lawyer Review / Judge Evaluation pages)
+  lib/            Formatting + label helpers, uploadConstraints.ts (size/type
+                   validation shared by transcript + document uploads),
+                   transcriptPolling.ts (poll interval/timeout constants)
   router/         Nav structure (src/router/routes.ts)
 ```
 
@@ -105,28 +122,82 @@ src/
   entries ("Sample question — placeholder for layout preview") so you can
   see populated layouts while wiring up the backend, without any of it
   resembling a real persecution narrative.
-- **Uploads:** transcript and document uploads accept a real file and echo
-  back a mock record; no file is persisted anywhere (no S3 wiring yet).
+- **Uploads:** transcript and document uploads validate type/size
+  client-side (`src/lib/uploadConstraints.ts`, mirroring the backend's
+  limits), then accept a real file and echo back a mock record — no file
+  is persisted anywhere in mock mode. In mock mode, transcript upload also
+  simulates the real backend's async processing → ready transition after a
+  few seconds, so the polling UI has something real to show even without a
+  backend connected.
+- **Lawyer/Judge in mock mode:** return `null` (not an empty object) when
+  there's nothing generated for a session yet, matching the real backend's
+  404-means-nothing-yet convention.
 
-## What I still need from you before backend integration
+## Stage 2 status (backend integration)
 
-1. **Auth model** — is this single-user/local, or will you add real
-   accounts? Determines whether `settingsService` and friends need a user
-   ID/session token attached.
-2. **Final field-level contract** — confirm the TypeScript shapes in
-   `src/types/` match what your FastAPI Pydantic models will actually
-   return (especially `CaseSummary`, `TranscriptDocument`, and
-   `HearingSessionState`, which are the most complex).
-3. **Transcript upload behavior** — should the frontend poll
-   `GET /api/transcript` after upload until `uploadStatus` becomes `ready`,
-   or will you push updates another way (WebSocket, SSE)? Currently it just
-   re-fetches once.
-4. **Hearing session lifecycle** — does one `hearingService.start()` call
-   cover a whole session (BAMF then lawyer then judge), or are these three
-   independent sessions? The current UI treats the three tabs as views into
-   one shared session state; say if that's wrong.
-5. **File size/type limits** for document and transcript uploads, so the
-   frontend can validate before hitting your backend.
-6. **Your actual `VITE_API_BASE_URL`** once the backend is deployed, plus
-   CORS configuration on the FastAPI side to allow requests from your
-   Netlify domain.
+All six open questions from the end of Stage 1 have been resolved and
+implemented — see the sibling `asylum-case-prep-backend` project's README
+for the full backend-side report. In short: single-user/no-auth for now,
+the TypeScript shapes above are implemented 1:1 in Pydantic (camelCase
+JSON via an alias generator), transcript processing uses polling
+(`GET /api/transcript/status` every 3s, ~5 min timeout), Lawyer/Judge are
+scoped to a specific hearing session, upload limits are 50MB
+(transcript) / 25MB (documents) with PDF/DOCX/TXT/JPG/JPEG/PNG allowed,
+and `VITE_API_BASE_URL` + CORS remain your deployment-time configuration —
+nothing is hard-coded.
+
+## Implemented workflow
+
+Transcript structuring, BAMF questioning, explicit hearing completion, Lawyer
+review, Judge evaluation, and dated research references are implemented in the
+backend. AI features require an Anthropic API key; they never run in the browser.
+
+## Workspace access
+
+With VITE_API_BASE_URL configured, unlock using the backend WORKSPACE_ACCESS_KEY.
+Never put this key in frontend environment variables. It is held only in memory;
+reload or use Lock workspace to clear it. Demo mode contains sample data and needs no key.
+
+## Stage 7C: recovery and question sources
+
+Update both projects together. Hearing answer requests include the displayed
+exchange id, and a failed next-question call offers Retry next question after
+refreshing the saved state. Drafts that were not saved remain in the form.
+While another generation is running, the page checks state automatically.
+Pending start requests retain their identity and configuration across tab reloads.
+The configured start page opens the exact session returned by the backend.
+
+Question sources displays immutable saved passages and flags unmatched citations.
+A link to the current transcript uses its entry id and warns if the source has
+been replaced, rather than substituting a new passage with the same Q number.
+Legacy questions show that source references were not recorded.
+
+Validation:
+
+```bash
+npm ci
+npm test
+npm run build
+npm run lint
+```
+
+Nineteen frontend tests cover request identities, saved-answer recovery, draft
+preservation, exact-session navigation, source display, and stale async results.
+Lint has three existing warnings in DataModeContext, CountryInformation, and Settings.
+
+## Stages 7D and 8A: supporting records and preparation findings
+
+Open Preparation findings from a hearing, its Lawyer/Judge page, or Previous Sessions.
+The sidebar entry asks you to select a session. This view requires a connected backend;
+other sample-data pages continue to work without one.
+
+The page groups the selected analysis versions' existing findings, with filters for
+origin, category, and text. A mismatch notice identifies when the Judge used an older
+Lawyer version and lets you select that exact version. Nothing is generated by opening
+the page. Generation remains on the existing Lawyer/Judge pages.
+
+Supporting records expands saved passages, evidence metadata, research dates/links,
+and the Judge-to-Lawyer-to-hearing source chain. Only HTTP(S) research links are rendered.
+Lawyer/Judge pages support `?sessionId=...&version=...` and exact finding anchors. Missing
+versions never silently show the latest analysis. Legacy and uncited narrative findings
+explicitly say that saved item-level source details are unavailable.
